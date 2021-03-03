@@ -125,6 +125,21 @@ public protocol NavigationViewControllerDelegate: VisualInstructionDelegate {
      If this method is unimplemented, the navigation view controller's map view draws the waypoints using default 'FeatureCollection`.
      */
     func navigationViewController(_ navigationViewController: NavigationViewController, shapeFor waypoints: [Waypoint], legIndex: Int) -> FeatureCollection?
+    
+    /**
+     Returns an `LineLayer` that determines the appearance of the route line.
+
+     If this method is not implemented, the navigation view controller’s map view draws the route line using default `LineLayer`.
+    */
+    func navigationViewController(_ navigationViewController: NavigationViewController, routeLineLayerWithIdentifier identifier: String, sourceIdentifier: String) -> LineLayer?
+
+    /**
+     Returns an `LineLayer` that determines the appearance of the casing around the route line.
+
+     If this method is not implemented, the navigation view controller’s map view draws the casing for the route line using default `LineLayer`.
+    */
+    func navigationViewController(_ navigationViewController: NavigationViewController, routeCasingLineLayerWithIdentifier identifier: String, sourceIdentifier: String) -> LineLayer?
+    
     /**
      Called when the user taps to select a route on the navigation view controller’s map view.
      - parameter navigationViewController: The navigation view controller presenting the route that the user selected.
@@ -233,12 +248,28 @@ public extension NavigationViewControllerDelegate {
         logUnimplemented(protocolType: NavigationViewControllerDelegate.self, level: .debug)
         return nil
     }
+
+    /**
+     `UnimplementedLogging` prints a warning to standard output the first time this method is called.
+     */
+    func navigationViewController(_ navigationViewController: NavigationViewController, routeLineLayerWithIdentifier identifier: String, sourceIdentifier: String) -> LineLayer? {
+        logUnimplemented(protocolType: NavigationViewControllerDelegate.self,  level: .debug)
+        return nil
+    }
     
     /**
      `UnimplementedLogging` prints a warning to standard output the first time this method is called.
      */
     func navigationViewController(_ navigationViewController: NavigationViewController, waypointSymbolLayerWithIdentifier identifier: String, sourceIdentifier: String) -> SymbolLayer? {
         logUnimplemented(protocolType: NavigationViewControllerDelegate.self, level: .debug)
+        return nil
+    }
+    
+    /**
+     `UnimplementedLogging` prints a warning to standard output the first time this method is called.
+     */
+    func navigationViewController(_ navigationViewController: NavigationViewController, routeCasingLineLayerWithIdentifier identifier: String, sourceIdentifier: String) -> LineLayer? {
+        logUnimplemented(protocolType: NavigationViewControllerDelegate.self,  level: .debug)
         return nil
     }
     

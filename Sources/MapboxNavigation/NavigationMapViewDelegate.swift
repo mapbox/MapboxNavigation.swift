@@ -9,6 +9,47 @@ import Turf
  The `NavigationMapViewDelegate` provides methods for configuring the NavigationMapView, as well as responding to events triggered by the NavigationMapView.
  */
 public protocol NavigationMapViewDelegate: class, UnimplementedLogging {
+   
+    /**
+     Asks the receiver to return a `LineLayer` for the route line, given a layer identifier and a source identifier.
+     This method is invoked when the map view loads and any time routes are added.
+     - parameter navigationMapView: The NavigationMapView.
+     - parameter identifier: The line layer identifier.
+     - parameter sourceIdentifier: The source identifier containing the route data that this method would style.
+     - returns: A `LineLayer` that is applied to the route line.
+    */
+    func navigationMapView(_ navigationMapView: NavigationMapView, routeLineLayerWithIdentifier identifier: String, sourceIdentifier: String) -> LineLayer?
+    
+    /**
+     Asks the receiver to return a `LineLayer` for the casing layer that surrounds route line, given a layer identifier and a source identifier.
+     This method is invoked when the map view loads and any time routes are added.
+     - parameter navigationMapView: The NavigationMapView.
+     - parameter identifier: The line layer identifier.
+     - parameter source: The source containing the route data that this method would style.
+     - returns: A `LineLayer` that is applied as a casing around the route line.
+    */
+    func navigationMapView(_ navigationMapView: NavigationMapView, routeCasingLineLayerWithIdentifier identifier: String, sourceIdentifier: String) -> LineLayer?
+    
+    /**
+     Asks the receiver to return an `LineString` that describes the geometry of the route.
+        
+     Resulting `LineString` will then be styled using `NavigationMapView.navigationMapView(_:routeLineLayerWithIdentifier:sourceIdentifier:)` provided style or a default congestion style if above delegate method was not implemented.
+     - parameter navigationMapView: The NavigationMapView.
+     - parameter route: The route that the sender is asking about.
+     - returns: A `LineString` object that defines the shape of the route, or `nil` in case of default behavior.
+     */
+    func navigationMapView(_ navigationMapView: NavigationMapView, shapeFor route: Route) -> LineString?
+    
+    /**
+     Asks the receiver to return an `LineString` that describes the geometry of the route casing.
+     
+     Resulting `LineString` will then be styled using `NavigationMapView.navigationMapView(_:routeCasingLineLayerWithIdentifier:sourceIdentifier:)` provided style or a default style if above delegate method was not implemented.
+     - parameter navigationMapView: The NavigationMapView.
+     - parameter route: The route that the sender is asking about.
+     - returns: A `LineString` object that defines the shape of the route casing, or `nil` in case of default behavior.
+     */
+    func navigationMapView(_ navigationMapView: NavigationMapView, casingShapeFor route: Route) -> LineString?
+
     /**
      Asks the receiver to return a `CircleLayer` for waypoints, given an identifier and source.
      This method is invoked any time waypoints are added or shown.
@@ -65,6 +106,22 @@ public extension NavigationMapViewDelegate {
     /**
      `UnimplementedLogging` prints a warning to standard output the first time this method is called.
      */
+    func navigationMapView(_ navigationMapView: NavigationMapView, routeLineLayerWithIdentifier identifier: String, sourceIdentifier: String) -> LineLayer? {
+        logUnimplemented(protocolType: NavigationMapViewDelegate.self, level: .debug)
+        return nil
+    }
+
+    /**
+     `UnimplementedLogging` prints a warning to standard output the first time this method is called.
+     */
+    func navigationMapView(_ navigationMapView: NavigationMapView, routeCasingLineLayerWithIdentifier identifier: String, sourceIdentifier: String) -> LineLayer? {
+        logUnimplemented(protocolType: NavigationMapViewDelegate.self, level: .debug)
+        return nil
+    }
+
+    /**
+     `UnimplementedLogging` prints a warning to standard output the first time this method is called.
+     */
     func navigationMapView(_ navigationMapView: NavigationMapView, waypointCircleLayerWithIdentifier identifier: String, sourceIdentifier: String) -> CircleLayer? {
         logUnimplemented(protocolType: NavigationMapViewDelegate.self, level: .debug)
         return nil
@@ -83,6 +140,22 @@ public extension NavigationMapViewDelegate {
      */
     func navigationMapView(_ navigationMapView: NavigationMapView, didSelect route: Route) {
         logUnimplemented(protocolType: NavigationMapViewDelegate.self, level: .debug)
+    }
+
+    /**
+     `UnimplementedLogging` prints a warning to standard output the first time this method is called.
+     */
+    func navigationMapView(_ navigationMapView: NavigationMapView, shapeFor route: Route) -> LineString? {
+        logUnimplemented(protocolType: NavigationMapViewDelegate.self, level: .debug)
+        return nil
+    }
+    
+    /**
+     `UnimplementedLogging` prints a warning to standard output the first time this method is called.
+     */
+    func navigationMapView(_ navigationMapView: NavigationMapView, casingShapeFor route: Route) -> LineString? {
+        logUnimplemented(protocolType: NavigationMapViewDelegate.self, level: .debug)
+        return nil
     }
     
     /**

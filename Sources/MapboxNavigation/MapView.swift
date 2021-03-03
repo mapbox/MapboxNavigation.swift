@@ -144,4 +144,32 @@ extension MapView {
         
         return []
     }
+
+    var mainRouteLineParentLayerIdentifier: String? {
+        var parentLayer: String? = nil
+        let identifiers = [
+            IdentifierString.arrow,
+            IdentifierString.arrowSymbol,
+            IdentifierString.arrowCasingSymbol,
+            IdentifierString.arrowStroke,
+            IdentifierString.waypointCircle
+        ]
+        
+        guard let layers = try? __map.getStyleLayers().reversed() else { return nil }
+        for layer in layers {
+            if !(layer.type == "symbol") && !identifiers.contains(layer.id) {
+                let sourceLayer = try? __map.getStyleLayerProperty(forLayerId: layer.id, property: "source-layer").value as? String
+                
+                if let sourceLayer = sourceLayer,
+                   sourceLayer.isEmpty {
+                    continue
+                }
+                
+                parentLayer = layer.id
+                break
+            }
+        }
+        
+        return parentLayer
+    }
 }

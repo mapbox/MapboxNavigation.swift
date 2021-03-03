@@ -679,6 +679,14 @@ extension RouteMapViewController: NavigationViewDelegate {
         delegate?.navigationMapView(navigationMapView, waypointSymbolLayerWithIdentifier: identifier, sourceIdentifier: sourceIdentifier)
     }
     
+    func navigationMapView(_ navigationMapView: NavigationMapView, routeLineLayerWithIdentifier identifier: String, sourceIdentifier: String) -> LineLayer? {
+        return delegate?.navigationMapView(navigationMapView, routeLineLayerWithIdentifier: identifier, sourceIdentifier: sourceIdentifier)
+    }
+
+    func navigationMapView(_ navigationMapView: NavigationMapView, routeCasingLineLayerWithIdentifier identifier: String, sourceIdentifier: String) -> LineLayer? {
+        return delegate?.navigationMapView(navigationMapView, routeCasingLineLayerWithIdentifier: identifier, sourceIdentifier: sourceIdentifier)
+    }
+    
     func navigationMapView(_ navigationMapView: NavigationMapView, didSelect route: Route) {
         delegate?.navigationMapView(navigationMapView, didSelect: route)
     }

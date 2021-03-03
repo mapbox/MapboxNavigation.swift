@@ -55,33 +55,6 @@ open class NavigationMapView: UIView {
      */
     public var roadClassesWithOverriddenCongestionLevels: Set<MapboxStreetsRoadClass>? = nil
     
-    enum IdentifierType: Int {
-        case source
-        
-        case route
-        
-        case routeCasing
-    }
-    
-    struct IdentifierString {
-        static let identifier = Bundle.mapboxNavigation.bundleIdentifier ?? ""
-        static let arrowImage = "triangle-tip-navigation"
-        static let arrowSource = "\(identifier)_arrowSource"
-        static let arrow = "\(identifier)_arrow"
-        static let arrowStrokeSource = "\(identifier)arrowStrokeSource"
-        static let arrowStroke = "\(identifier)_arrowStroke"
-        static let arrowSymbolSource = "\(identifier)_arrowSymbolSource"
-        static let arrowSymbol = "\(identifier)_arrowSymbol"
-        static let arrowCasingSymbol = "\(identifier)_arrowCasingSymbol"
-        static let instructionSource = "\(identifier)_instructionSource"
-        static let instructionLabel = "\(identifier)_instructionLabel"
-        static let instructionCircle = "\(identifier)_instructionCircle"
-        static let waypointSource = "\(identifier)_waypointSource"
-        static let waypointCircle = "\(identifier)_waypointCircle"
-        static let waypointSymbol = "\(identifier)_waypointSymbol"
-        static let buildingExtrusionLayer = "\(identifier)buildingExtrusionLayer"
-    }
-    
     @objc dynamic public var trafficUnknownColor: UIColor = .trafficUnknown
     @objc dynamic public var trafficLowColor: UIColor = .trafficLow
     @objc dynamic public var trafficModerateColor: UIColor = .trafficModerate
@@ -141,8 +114,8 @@ open class NavigationMapView: UIView {
     
     var showsRoute: Bool {
         get {
-            guard let mainRouteLayerIdentifier = identifier(routes?.first, identifierType: .route),
-                  let mainRouteCasingLayerIdentifier = identifier(routes?.first, identifierType: .routeCasing) else { return false }
+            guard let mainRouteLayerIdentifier = routes?.first?.identifier(.route(isMainRoute: true)),
+                  let mainRouteCasingLayerIdentifier = routes?.first?.identifier(.routeCasing(isMainRoute: true)) else { return false }
             
             guard let _ = try? mapView.style.getLayer(with: mainRouteLayerIdentifier, type: LineLayer.self).get(),
                   let _ = try? mapView.style.getLayer(with: mainRouteCasingLayerIdentifier, type: LineLayer.self).get() else { return false }
@@ -476,146 +449,91 @@ open class NavigationMapView: UIView {
         // TODO: Add ability to handle legIndex.
         var parentLayerIdentifier: String? = nil
         for (index, route) in routes.enumerated() {
-            if index == 0 {
-                parentLayerIdentifier = addMainRouteLayer(route)
-                parentLayerIdentifier = addMainRouteCasingLayer(route, below: parentLayerIdentifier)
-                
-                if routeLineTracksTraversal {
-                    initPrimaryRoutePoints(route: route)
-                }
-                
-                continue
+            if index == 0, routeLineTracksTraversal {
+                initPrimaryRoutePoints(route: route)
             }
             
-            parentLayerIdentifier = addAlternativeRouteLayer(route,  below: parentLayerIdentifier)
-            addAlternativeRouteCasingLayer(route, below: parentLayerIdentifier)
+            parentLayerIdentifier = addRouteLayer(route, below: parentLayerIdentifier, isMainRoute: index == 0)
+            parentLayerIdentifier = addRouteCasingLayer(route, below: parentLayerIdentifier, isMainRoute: index == 0)
         }
     }
     
-    @discardableResult func addMainRouteLayer(_ route: Route) -> String? {
+    @discardableResult func addRouteLayer(_ route: Route, below parentLayerIndentifier: String? = nil, isMainRoute: Bool = true) -> String? {
         guard let shape = route.shape else { return nil }
         
         var geoJSONSource = GeoJSONSource()
         geoJSONSource.data = .geometry(.lineString(shape))
         geoJSONSource.lineMetrics = true
         
-        guard let sourceIdentifier = identifier(route, identifierType: .source) else { return nil }
+        let sourceIdentifier = route.identifier(.source(isMainRoute: isMainRoute, isSourceCasing: true))
         mapView.style.addSource(source: geoJSONSource, identifier: sourceIdentifier)
         
-        let fractionTraveledForStops = routeLineTracksTraversal ? fractionTraveled : 0.0
-        guard let layerIdentifier = identifier(route, identifierType: .route) else { return nil }
-        var lineLayer = LineLayer(id: layerIdentifier)
-        lineLayer.source = sourceIdentifier
-        lineLayer.paint?.lineWidth = .expression(Expression.routeLineWidthExpression())
-        lineLayer.layout?.lineJoin = .round
-        lineLayer.layout?.lineCap = .round
+        let layerIdentifier = route.identifier(.route(isMainRoute: isMainRoute))
+        var lineLayer = delegate?.navigationMapView(self,
+                                                    routeLineLayerWithIdentifier: layerIdentifier,
+                                                    sourceIdentifier: sourceIdentifier)
         
-        if let gradientStops = routeLineGradient(route, fractionTraveled: fractionTraveledForStops) {
-            lineLayer.paint?.lineGradient = .expression((Expression.routeLineGradientExpression(gradientStops)))
-        }
-        
-        var parentLayer: String? {
-            var parentLayer: String? = nil
-            let identifiers = [
-                IdentifierString.arrow,
-                IdentifierString.arrowSymbol,
-                IdentifierString.arrowCasingSymbol,
-                IdentifierString.arrowStroke,
-                IdentifierString.waypointCircle
-            ]
+        if lineLayer == nil {
+            lineLayer = LineLayer(id: layerIdentifier)
+            lineLayer?.source = sourceIdentifier
+            lineLayer?.paint?.lineColor = .constant(.init(color: trafficUnknownColor))
+            lineLayer?.paint?.lineWidth = .expression(Expression.routeLineWidthExpression())
+            lineLayer?.layout?.lineJoin = .round
+            lineLayer?.layout?.lineCap = .round
             
-            guard let layers = try? mapView.__map.getStyleLayers().reversed() else { return nil }
-            for layer in layers {
-                if !(layer.type == "symbol") && !identifiers.contains(layer.id) {
-                    let sourceLayer = try? mapView.__map.getStyleLayerProperty(forLayerId: layer.id, property: "source-layer").value as? String
-                    
-                    if let sourceLayer = sourceLayer,
-                       sourceLayer.isEmpty {
-                        continue
-                    }
-                    
-                    parentLayer = layer.id
-                    break
-                }
+            if isMainRoute {
+                let gradientStops = routeLineGradient(route.congestionFeatures(roadClassesWithOverriddenCongestionLevels: roadClassesWithOverriddenCongestionLevels),
+                                                      fractionTraveled: routeLineTracksTraversal ? fractionTraveled : 0.0)
+                lineLayer?.paint?.lineGradient = .expression((Expression.routeLineGradientExpression(gradientStops)))
+            } else {
+                lineLayer?.paint?.lineColor = .constant(.init(color: routeAlternateColor))
             }
-            
-            return parentLayer
         }
         
-        mapView.style.addLayer(layer: lineLayer, layerPosition: LayerPosition(above: parentLayer))
+        if let lineLayer = lineLayer {
+            mapView.style.addLayer(layer: lineLayer,
+                                   layerPosition: isMainRoute ?
+                                    LayerPosition(above: mapView.mainRouteLineParentLayerIdentifier) :
+                                    LayerPosition(below: parentLayerIndentifier))
+        }
         
         return layerIdentifier
     }
     
-    @discardableResult func addMainRouteCasingLayer(_ route: Route, below parentLayerIndentifier: String? = nil) -> String? {
+    @discardableResult func addRouteCasingLayer(_ route: Route, below parentLayerIndentifier: String? = nil, isMainRoute: Bool = true) -> String? {
         guard let shape = route.shape else { return nil }
         
         var geoJSONSource = GeoJSONSource()
         geoJSONSource.data = .geometry(.lineString(shape))
         geoJSONSource.lineMetrics = true
         
-        guard let sourceIdentifier = identifier(route, identifierType: .source, isMainRouteCasingSource: true) else { return nil }
+        let sourceIdentifier = route.identifier(.source(isMainRoute: isMainRoute, isSourceCasing: isMainRoute))
         mapView.style.addSource(source: geoJSONSource, identifier: sourceIdentifier)
         
-        let fractionTraveledForStops = routeLineTracksTraversal ? fractionTraveled : 0.0
-        guard let layerIdentifier = identifier(route, identifierType: .routeCasing) else { return nil }
-        var lineLayer = LineLayer(id: layerIdentifier)
-        lineLayer.source = sourceIdentifier
-        lineLayer.paint?.lineColor = .constant(.init(color: routeCasingColor))
-        lineLayer.paint?.lineWidth = .expression(Expression.routeLineWidthExpression(1.5))
-        lineLayer.layout?.lineJoin = .round
-        lineLayer.layout?.lineCap = .round
+        let layerIdentifier = route.identifier(.routeCasing(isMainRoute: isMainRoute))
+        var lineLayer = delegate?.navigationMapView(self,
+                                                    routeCasingLineLayerWithIdentifier: layerIdentifier,
+                                                    sourceIdentifier: sourceIdentifier)
         
-        mapView.style.addLayer(layer: lineLayer, layerPosition: LayerPosition(below: parentLayerIndentifier))
+        if lineLayer == nil {
+            lineLayer = LineLayer(id: layerIdentifier)
+            lineLayer?.source = sourceIdentifier
+            lineLayer?.paint?.lineColor = .constant(.init(color: routeCasingColor))
+            lineLayer?.paint?.lineWidth = .expression(Expression.routeLineWidthExpression(1.5))
+            lineLayer?.layout?.lineJoin = .round
+            lineLayer?.layout?.lineCap = .round
+            
+            if isMainRoute {
+                let gradientStops = routeLineGradient(fractionTraveled: routeLineTracksTraversal ? fractionTraveled : 0.0)
+                lineLayer?.paint?.lineGradient = .expression(Expression.routeLineGradientExpression(gradientStops))
+            } else {
+                lineLayer?.paint?.lineColor = .constant(.init(color: routeAlternateCasingColor))
+            }
+        }
         
-        let gradientStops = routeCasingGradient(fractionTraveledForStops)
-        lineLayer.paint?.lineGradient = .expression(Expression.routeLineGradientExpression(gradientStops))
-
-        return layerIdentifier
-    }
-    
-    @discardableResult func addAlternativeRouteLayer(_ route: Route, below parentLayerIndentifier: String? = nil) -> String? {
-        guard let shape = route.shape else { return nil }
-        
-        var geoJSONSource = GeoJSONSource()
-        geoJSONSource.data = .geometry(.lineString(shape))
-        geoJSONSource.lineMetrics = true
-        
-        guard let sourceIdentifier = identifier(route, identifierType: .source) else { return nil }
-        mapView.style.addSource(source: geoJSONSource, identifier: sourceIdentifier)
-        
-        guard let layerIdentifier = identifier(route, identifierType: .route) else { return nil }
-        var lineLayer = LineLayer(id: layerIdentifier)
-        lineLayer.source = sourceIdentifier
-        lineLayer.paint?.lineColor = .constant(.init(color: routeAlternateColor))
-        lineLayer.paint?.lineWidth = .expression(Expression.routeLineWidthExpression())
-        lineLayer.layout?.lineJoin = .round
-        lineLayer.layout?.lineCap = .round
-
-        mapView.style.addLayer(layer: lineLayer, layerPosition: LayerPosition(below: parentLayerIndentifier))
-        
-        return layerIdentifier
-    }
-    
-    @discardableResult func addAlternativeRouteCasingLayer(_ route: Route, below parentLayerIndentifier: String? = nil) -> String? {
-        guard let shape = route.shape else { return nil }
-        
-        var geoJSONSource = GeoJSONSource()
-        geoJSONSource.data = .geometry(.lineString(shape))
-        geoJSONSource.lineMetrics = true
-        
-        guard let sourceIdentifier = identifier(route, identifierType: .source) else { return nil }
-        mapView.style.addSource(source: geoJSONSource, identifier: sourceIdentifier)
-        
-        guard let layerIdentifier = identifier(route, identifierType: .routeCasing) else { return nil }
-        var lineLayer = LineLayer(id: layerIdentifier)
-        lineLayer.source = sourceIdentifier
-        lineLayer.paint?.lineColor = .constant(.init(color: routeAlternateCasingColor))
-        lineLayer.paint?.lineWidth = .expression(Expression.routeLineWidthExpression(1.5))
-        lineLayer.layout?.lineJoin = .round
-        lineLayer.layout?.lineCap = .round
-        
-        mapView.style.addLayer(layer: lineLayer, layerPosition: LayerPosition(below: parentLayerIndentifier))
+        if let lineLayer = lineLayer {
+            mapView.style.addLayer(layer: lineLayer, layerPosition: LayerPosition(below: parentLayerIndentifier))
+        }
         
         return layerIdentifier
     }
@@ -654,7 +572,7 @@ open class NavigationMapView: UIView {
                 if let arrows = try? mapView.style.getLayer(with: IdentifierString.arrowSymbol, type: LineLayer.self).get() {
                     mapView.style.addLayer(layer: circles, layerPosition: LayerPosition(above: arrows.id))
                 } else {
-                    guard let layerIdentifier = identifier(route, identifierType: .route) else { return }
+                    let layerIdentifier = route.identifier(.route(isMainRoute: true))
                     mapView.style.addLayer(layer: circles, layerPosition: LayerPosition(above: layerIdentifier))
                 }
                 mapView.style.addLayer(layer: symbols, layerPosition: LayerPosition(above: circles.id))
@@ -718,21 +636,10 @@ open class NavigationMapView: UIView {
         var sourceIdentifiers = Set<String>()
         var layerIdentifiers = Set<String>()
         routes?.enumerated().forEach {
-            if $0.offset == 0, let identifier = identifier($0.element, identifierType: .source, isMainRouteCasingSource: true) {
-                sourceIdentifiers.insert(identifier)
-            }
-            
-            if let identifier = identifier($0.element, identifierType: .source) {
-                sourceIdentifiers.insert(identifier)
-            }
-            
-            if let identifier = identifier($0.element, identifierType: .route) {
-                layerIdentifiers.insert(identifier)
-            }
-            
-            if let identifier = identifier($0.element, identifierType: .routeCasing) {
-                layerIdentifiers.insert(identifier)
-            }
+            sourceIdentifiers.insert($0.element.identifier(.source(isSourceCasing: true)))
+            sourceIdentifiers.insert($0.element.identifier(.source()))
+            layerIdentifiers.insert($0.element.identifier(.route(isMainRoute: $0.offset == 0)))
+            layerIdentifiers.insert($0.element.identifier(.routeCasing(isMainRoute: $0.offset == 0)))
         }
         
         mapView.style.removeLayers(layerIdentifiers)
@@ -741,26 +648,6 @@ open class NavigationMapView: UIView {
         routes = nil
         routePoints = nil
         routeLineGranularDistances = nil
-    }
-    
-    func identifier(_ route: Route?, identifierType: IdentifierType, isMainRouteCasingSource: Bool = false) -> String? {
-        guard let route = route else { return nil }
-        let identifier = Unmanaged.passUnretained(route).toOpaque()
-        
-        switch identifierType {
-        case .source:
-            if isMainRouteCasingSource {
-                return "\(identifier)_casing_source"
-            }
-            
-            return "\(identifier)_source"
-            
-        case .route:
-            return "\(identifier)_route"
-            
-        case .routeCasing:
-            return "\(identifier)_casing"
-        }
     }
     
     public func removeWaypoints() {
@@ -783,15 +670,11 @@ open class NavigationMapView: UIView {
     public func addArrow(route: Route, legIndex: Int, stepIndex: Int) {
         guard route.legs.indices.contains(legIndex),
               route.legs[legIndex].steps.indices.contains(stepIndex),
-              let mainRouteLayerIdentifier = identifier(route, identifierType: .route),
               let triangleImage = Bundle.mapboxNavigation.image(named: "triangle")?.withRenderingMode(.alwaysTemplate) else { return }
         
         let _ = mapView.style.setStyleImage(image: triangleImage, with: IdentifierString.arrowImage, scale: 1.0)
-        
-        let minimumZoomLevel: Double = 8.0
         let step = route.legs[legIndex].steps[stepIndex]
         let maneuverCoordinate = step.maneuverLocation
-        
         guard step.maneuverType != .arrive else { return }
         
         // TODO: Implement ability to change `shaftLength` depending on zoom level.
@@ -799,6 +682,8 @@ open class NavigationMapView: UIView {
         let shaftPolyline = route.polylineAroundManeuver(legIndex: legIndex, stepIndex: stepIndex, distance: shaftLength)
         
         if shaftPolyline.coordinates.count > 1 {
+            let mainRouteLayerIdentifier = route.identifier(.route(isMainRoute: true))
+            let minimumZoomLevel: Double = 8.0
             let shaftStrokeCoordinates = shaftPolyline.coordinates
             let shaftDirection = shaftStrokeCoordinates[shaftStrokeCoordinates.count - 2].direction(to: shaftStrokeCoordinates.last!)
             
