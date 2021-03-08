@@ -16,4 +16,5 @@ struct IdentifierString {
     static let waypointSource = "\(identifier)_waypointSource"
     static let waypointCircle = "\(identifier)_waypointCircle"
     static let waypointSymbol = "\(identifier)_waypointSymbol"
+    static let buildingExtrusionLayer = "\(identifier)buildingExtrusionLayer"
 }
